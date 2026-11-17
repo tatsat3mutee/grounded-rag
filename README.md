@@ -1,5 +1,11 @@
 # Grounded RAG
 
+[![ci](https://github.com/tatsat3mutee/grounded-rag/actions/workflows/ci.yml/badge.svg)](https://github.com/tatsat3mutee/grounded-rag/actions/workflows/ci.yml)
+![Java 21](https://img.shields.io/badge/Java-21-blue)
+![Spring Boot 4](https://img.shields.io/badge/Spring%20Boot-4-6db33f)
+![Spring AI 2](https://img.shields.io/badge/Spring%20AI-2-6db33f)
+![License: MIT](https://img.shields.io/badge/license-MIT-lightgrey)
+
 A multi-tenant document question-answering service built on **Spring Boot 4 and Spring AI 2**.
 Every answer cites its sources, is checked against them before it is returned, and comes with a
 confidence level. When the documents do not contain the answer, the service says so instead of
@@ -185,7 +191,6 @@ src/main/java/io/groundedrag/
   web/           REST + SSE controllers, problem details
 eval/            golden set and fictional corpus
 docs/            architecture, ADRs, evaluation, performance, configuration, interview guide
-scripts/         one-time GitHub repository consolidation
 ```
 
 ## Known limitations
@@ -197,3 +202,10 @@ scripts/         one-time GitHub repository consolidation
   cross-encoder profile ([EVALUATION](docs/EVALUATION.md)).
 - Rate-limit buckets are per instance; use Redis (Bucket4j) for a global limit across replicas.
 - Access control is per space. Per-document ACLs would be a pre-filter in the store.
+
+## Related
+
+[mtech-teleco-multiagent-project](https://github.com/tatsat3mutee/mtech-teleco-multiagent-project)
+is the agentic counterpart, in Python. It is a LangGraph multi-agent system (investigator,
+reasoner, critic, reporter) with GraphRAG for root-cause analysis of telecom billing anomalies.
+This repository focuses on production document Q&A; that one focuses on multi-step agent reasoning.
