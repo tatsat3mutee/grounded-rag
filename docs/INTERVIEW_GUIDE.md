@@ -158,6 +158,31 @@ The result was 36 ms to 12.5 ms p50. The same `EXPLAIN` session proved why the i
 setting is needed. Without it, filtered HNSW returned 0 of 30 rows, because the space filter
 removed all 40 candidates the index produced. (docs/PERFORMANCE.md)
 
+**Why not LangChain or LangGraph?**
+Because the problems they solve aren't present yet. Spring AI already gives me the model and
+embedding abstraction, so LangChain4j would be a second client, a second message type and a second
+tracing path for the same calls. The query path is a pipeline with two early exits and one bounded
+retry: no cycles, no durable state, no human approval mid-run. That's what LangGraph is for. I
+designed it graph-shaped (each step typed, `Plan` as the state, exits as conditional edges), so
+moving to LangGraph4j is mechanical when there's a real trigger: an agentic loop, tool use with
+branching, resumable runs, or human-in-the-loop. My thesis uses LangGraph exactly for that: a
+critic revision loop over four agents. (ADR 0010)
+
+**Why Java 25? Just to be on the latest?**
+For three runtime changes that apply here:
+- Virtual threads no longer pin on `synchronized` (JDK 24). My request threads are virtual, and the
+  cache, memory and rate-limit buckets use `synchronized`. On 21 I'd have had to rewrite them with
+  `ReentrantLock`.
+- The AOT cache halved startup, 4.2 s to 1.9 s.
+- Compact object headers cut live heap by 7%. That's modest, because most of the heap is embedding
+  arrays.
+
+The migration taught me two things worth saying:
+- An incremental build kept Java 21 bytecode while every test passed. Check the class-file version,
+  not the green build.
+- The AOT cache is silently rejected if you train it with different JVM flags than you run with.
+  (ADR 0011)
+
 **What would you do next?**
 1. Run the evaluation with real models, a reranker and the faithfulness judge, and grow the golden
    set from traces.
@@ -175,8 +200,9 @@ removed all 40 candidates the index produced. (docs/PERFORMANCE.md)
 - **Tests:** 100+ executions across unit, contract (in-memory and Postgres), API (including JWT and
   rate limits), architecture rules, socket-level streaming and the evaluation gate. Line coverage
   is about 93%.
-- **Latency (offline models, about 9k chunks, Postgres):** retrieval 12.5 ms p50 and 36 ms p95;
-  vector search 2 ms; keyword search 10 ms. Down from 36 ms p50 before profiling.
+- **Latency (offline models, about 9k chunks, Postgres, JDK 25):** retrieval 12.9 ms p50 and 39 ms
+  p95; vector search 2.5 ms; keyword search 8.5 ms. Down from 36 ms p50 before profiling.
+- **Java 25:** startup 4.2 s → 1.9 s with the AOT cache; −7% live heap with compact object headers.
 
 ## Live demo script (5 minutes)
 1. `./mvnw spring-boot:run`, open the UI, connect with the dev key, and upload `eval/corpus/product/*.md`.

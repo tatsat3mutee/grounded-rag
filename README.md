@@ -1,12 +1,12 @@
 # Grounded RAG
 
 [![ci](https://github.com/tatsat3mutee/grounded-rag/actions/workflows/ci.yml/badge.svg)](https://github.com/tatsat3mutee/grounded-rag/actions/workflows/ci.yml)
-![Java 21](https://img.shields.io/badge/Java-21-blue)
+![Java 25](https://img.shields.io/badge/Java-25%20LTS-blue)
 ![Spring Boot 4](https://img.shields.io/badge/Spring%20Boot-4-6db33f)
 ![Spring AI 2](https://img.shields.io/badge/Spring%20AI-2-6db33f)
 ![License: MIT](https://img.shields.io/badge/license-MIT-lightgrey)
 
-A multi-tenant document question-answering service built on **Spring Boot 4 and Spring AI 2**.
+A multi-tenant document question-answering service built on **Java 25, Spring Boot 4 and Spring AI 2**.
 Every answer cites its sources, is checked against them before it is returned, and comes with a
 confidence level. When the documents do not contain the answer, the service says so instead of
 guessing, and it decides that without spending an LLM call.
@@ -67,6 +67,8 @@ flowchart LR
 Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Design decisions: [docs/adr](docs/adr).
 
 ## Run it
+
+Requires JDK 25; the build stops with a clear message on an older JDK. Docker is optional.
 
 **Zero setup** (in-memory store, offline embeddings, extractive answers; no API key, no Docker):
 
@@ -151,12 +153,15 @@ reproduce: [docs/EVALUATION.md](docs/EVALUATION.md).
 
 ## Performance
 
-Service overhead with offline models (so model latency is excluded), on 4 CPUs:
+Service overhead with offline models (so model latency is excluded), on 4 CPUs and JDK 25:
 
 | Store | Chunks | Retrieve p50 / p95 | Full answer p50 / p95 |
 |---|---|---|---|
-| Postgres (pgvector HNSW + GIN) | 9,250 | 12.5 / 36.3 ms | 18.5 / 57.1 ms |
-| In-memory | 9,250 | 10.4 / 16.3 ms | 27.5 / 44.2 ms |
+| Postgres (pgvector HNSW + GIN) | 9,250 | 12.9 / 38.8 ms | 22.5 / 75.3 ms |
+| In-memory | 9,250 | 13.9 / 21.1 ms | 33.8 / 55.3 ms |
+
+On Java 25 the container starts in about 1.9 s instead of 4.2 s, thanks to an AOT cache recorded at
+image build. Compact object headers cut live heap by 7%.
 
 Profiling with `EXPLAIN ANALYZE` cut Postgres retrieval p50 from 36 ms to 12.5 ms. Keyword
 search computed cosine distance for every matched row, and the two search legs ran one after the

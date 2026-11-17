@@ -13,3 +13,5 @@ Short records of decisions that shaped the design: context, decision, alternativ
 | [0007](0007-verify-every-answer.md) | Deterministic verification on every answer; LLM judge offline |
 | [0008](0008-tenancy-from-credentials.md) | Tenancy derived from credentials (API keys, OIDC/JWT), failing closed; per-caller rate limits |
 | [0009](0009-enforced-quality-gates.md) | Quality enforced by the build: architecture rules, store contracts, eval gate, coverage |
+| [0010](0010-no-langchain-langgraph-yet.md) | No LangChain4j or LangGraph4j yet, and the conditions that would change it |
+| [0011](0011-java-25.md) | Java 25: virtual threads without pinning, AOT cache, compact object headers |

@@ -8,7 +8,7 @@ model calls. They are ingestion jobs, transactions, authorisation, caching, obse
 testability, and those are the JVM stack's strengths.
 
 ## Decision
-Java 21, Spring Boot 4, Spring AI 2. Spring AI provides the provider-neutral `ChatModel` and
+Java 25, Spring Boot 4, Spring AI 2 (Java 21 at first; see ADR 11). Spring AI provides the provider-neutral `ChatModel` and
 `EmbeddingModel`, the document readers and the token estimator. Retrieval, ranking, confidence
 and verification are this project's own code, because that is where the important decisions are
 and they must be testable without a model.
