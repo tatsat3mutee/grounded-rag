@@ -11,7 +11,7 @@ Every answer cites its sources, is checked against them before it is returned, a
 confidence level. When the documents do not contain the answer, the service says so instead of
 guessing, and it decides that without spending an LLM call.
 
-![Chat UI: a cited answer, a high-confidence answer, and a declined off-topic question](docs/images/ui.png)
+![A question is answered with a citation; the cited phrase lights up in the source excerpt and the answer is marked verified](docs/images/hero.gif)
 
 ## Why this exists
 
@@ -76,6 +76,8 @@ Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Design decisions: [docs/a
 
 Open http://localhost:8080, enter the dev key `dev-key-change-me-0001`, upload files from
 `eval/corpus/`, and ask questions.
+
+![The app: a declined off-topic question, an identifier lookup with a weak-match notice, and a verified answer; the Sources panel highlights the cited figures](docs/images/ui.png)
 
 **Production-like** (Postgres + pgvector with a Flyway-managed schema):
 

@@ -52,7 +52,7 @@ public class SecurityConfig {
                         // this the API-key filter (skipped on async dispatch) leaves it anonymous and
                         // the stream is cut off mid-response.
                         .dispatcherTypeMatchers(DispatcherType.ASYNC, DispatcherType.ERROR).permitAll()
-                        .requestMatchers("/", "/index.html", "/app.js", "/app.css", "/favicon.svg").permitAll()
+                        .requestMatchers("/", "/index.html", "/app.js", "/icons.js", "/app.css", "/favicon.svg").permitAll()
                         .requestMatchers("/actuator/health/**", "/actuator/info", "/error").permitAll()
                         .requestMatchers("/actuator/**").hasRole("API")
                         .anyRequest().hasRole("API"))

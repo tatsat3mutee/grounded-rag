@@ -8,42 +8,75 @@
   <link rel="stylesheet" href="app.css">
 </head>
 <body>
-<header class="top">
-  <div class="brand"><img src="favicon.svg" alt="" width="22" height="22"> Grounded RAG</div>
-  <form id="key-form" class="key">
-    <label for="api-key">API key</label>
-    <input id="api-key" type="password" autocomplete="off" placeholder="X-API-Key">
-    <button type="submit">Connect</button>
-  </form>
-</header>
+<div class="app" id="app" data-state="signed-out">
 
-<main class="layout">
-  <aside class="panel docs">
-    <h2>Spaces</h2>
-    <div id="spaces" class="chips" aria-label="Spaces to search"></div>
-    <form id="upload-form" class="upload">
-      <select id="upload-space" aria-label="Space to upload into"></select>
-      <input id="upload-file" type="file" accept=".pdf,.docx,.doc,.pptx,.html,.htm,.md,.markdown,.txt,.csv">
-      <button type="submit">Upload</button>
-    </form>
-    <ul id="documents" class="doc-list"></ul>
-  </aside>
-
-  <section class="panel chat">
-    <div id="messages" class="messages" aria-live="polite">
-      <p class="hint">Connect with an API key, upload a document, then ask a question. Every answer cites its sources and is checked against them.</p>
+  <aside class="sidebar" aria-label="Spaces and documents">
+    <div class="sidebar__head">
+      <span class="wordmark">Grounded RAG</span>
+      <button class="icon-btn" id="sign-out" type="button" title="Disconnect" aria-label="Disconnect" hidden></button>
     </div>
-    <form id="ask-form" class="ask">
-      <textarea id="question" rows="2" maxlength="2000" placeholder="Ask about your documents..." required></textarea>
-      <button type="submit">Ask</button>
-    </form>
-  </section>
 
-  <aside class="panel sources">
-    <h2>Sources</h2>
-    <ol id="sources" class="source-list"><li class="hint">Sources for the latest answer appear here.</li></ol>
+    <section class="sidebar__section">
+      <div class="section-title">Spaces</div>
+      <div id="spaces" class="space-list" role="group" aria-label="Spaces to search"></div>
+    </section>
+
+    <section class="sidebar__section sidebar__section--grow">
+      <div class="section-title">
+        Documents
+        <label class="btn btn--small" id="upload-label">
+          <span class="i" data-icon="upload"></span> Upload
+          <input id="upload-file" type="file" hidden
+                 accept=".pdf,.docx,.doc,.pptx,.html,.htm,.md,.markdown,.txt,.csv">
+        </label>
+      </div>
+      <select id="upload-space" class="select" aria-label="Space to upload into"></select>
+      <ul id="documents" class="doc-list"></ul>
+    </section>
+
+    <div class="sidebar__foot" id="who"></div>
   </aside>
-</main>
+
+  <main class="chat">
+    <!-- First run: connect -->
+    <div class="connect" id="connect">
+      <div class="connect__card">
+        <div class="connect__title">Connect to your knowledge base</div>
+        <p class="connect__text">Enter an API key. Your key decides which spaces you can search and upload to.</p>
+        <form id="key-form" class="connect__form">
+          <label class="field">
+            <span class="i" data-icon="key-round"></span>
+            <input id="api-key" type="password" autocomplete="off" placeholder="API key" aria-label="API key">
+          </label>
+          <button class="btn btn--primary" type="submit">Connect</button>
+        </form>
+        <p class="connect__hint">Local demo key: <code>dev-key-change-me-0001</code></p>
+        <p class="connect__error" id="connect-error" role="alert"></p>
+      </div>
+    </div>
+
+    <!-- Conversation -->
+    <div class="thread" id="thread" aria-live="polite">
+      <div class="empty" id="empty">
+        <div class="empty__title">Ask your documents</div>
+        <p class="empty__text">Answers cite their sources and are checked against them. If your documents don't cover a question, it says so.</p>
+        <div class="suggestions" id="suggestions"></div>
+      </div>
+    </div>
+
+    <form id="ask-form" class="composer">
+      <textarea id="question" rows="1" maxlength="2000" placeholder="Ask about your documents" aria-label="Question" required></textarea>
+      <button class="icon-btn icon-btn--primary" id="send" type="submit" aria-label="Send"></button>
+    </form>
+  </main>
+
+  <aside class="sources" aria-label="Sources">
+    <div class="sources__title">Sources</div>
+    <ol id="sources" class="source-list"></ol>
+    <p class="sources__empty" id="sources-empty">The passages an answer uses appear here, with the cited parts highlighted.</p>
+  </aside>
+</div>
+<script src="icons.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

@@ -1,0 +1,196 @@
+.gr .ss-stage {
+  overflow: hidden;
+  background: var(--ss-well);
+}
+
+/* Corner bleed: inset top and left by the gutter, off the bottom */
+.gr .gr-win {
+  position: absolute;
+  top: 40px;
+  left: 40px;
+  width: 600px;
+  height: 500px;
+  box-shadow: var(--ss-shadow-hero);
+}
+
+.gr .gr-body {
+  display: grid;
+  grid-template-rows: 1fr auto;
+  height: 100%;
+  /* The right 172px is the window's margin, where the Sources card straddles;
+     the composer ends a gutter above the stage edge */
+  padding: 16px 172px 120px 24px;
+  background: var(--ss-surface);
+}
+
+.gr .gr-thread {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 12px;
+  min-height: 0;
+  padding-bottom: 18px;
+  overflow: hidden;
+}
+
+.gr .gr-turn--past { display: grid; gap: 8px; padding-bottom: 6px; }
+.gr .gr-past-q { justify-self: end; }
+
+.gr .gr-q { display: flex; justify-content: flex-end; }
+
+.gr .gr-q .ss-text {
+  max-width: 82%;
+  white-space: normal;
+  text-wrap: pretty;
+  padding: 8px 14px;
+  border-radius: 16px;
+  background: var(--ss-accent-soft);
+  color: var(--ss-accent-text);
+  font-size: 13px;
+}
+
+.gr .gr-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ss-text);
+  font-size: 13px;
+}
+
+.gr .gr-status .ss-icon { color: var(--ss-icon-faint); flex: none; }
+
+.gr .gr-a { display: grid; gap: 12px; }
+
+.gr .gr-stream {
+  color: var(--ss-text-strong);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+/* Citations and the cited phrase share the excerpt's highlight: one blue
+   says "this came from there" */
+.gr .gr-stream .ss-stream__w[data-mark],
+.gr .gr-excerpt .ss-stream__w[data-mark] {
+  background-color: #dbe7f4;
+  color: var(--ss-accent-text);
+}
+
+.gr .gr-verified {
+  will-change: transform;
+  opacity: 0;
+  translate: 0 4px;
+  transition: opacity 0.35s ease, translate 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.gr .gr-verified[data-on] { opacity: 1; translate: 0 0; }
+
+/* The satellite: straddles the window's right edge, over its margin */
+.gr .gr-sources {
+  position: absolute;
+  top: 148px;
+  left: 496px;
+  width: 320px;
+  /* Runs off the bottom over the second source's filler lines only */
+  height: 400px;
+  align-content: start;
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border-radius: var(--ss-radius-lg);
+  background: var(--ss-surface);
+  box-shadow: var(--ss-shadow-satellite);
+}
+
+.gr .gr-sources__title {
+  padding: 2px 4px 6px;
+  color: var(--ss-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.gr .gr-src {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border-radius: var(--ss-radius-md);
+  transition: background-color 0.35s ease;
+}
+
+.gr .gr-src[data-cited] { background: var(--ss-accent-soft); }
+
+.gr .gr-src__head {
+  display: grid;
+  grid-template-columns: 20px 1fr;
+  align-items: center;
+  column-gap: 10px;
+}
+
+.gr .gr-src__n {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  background: var(--ss-ink-1);
+  color: var(--ss-text);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  transition: background-color 0.35s ease, color 0.35s ease;
+}
+
+.gr .gr-src[data-cited] .gr-src__n { background: var(--ss-accent); color: #fff; }
+
+/* Skeleton and real name share one cell, crossfaded: nothing reflows */
+.gr .gr-src__skel,
+.gr .gr-src__name {
+  grid-column: 2;
+  grid-row: 1;
+  display: grid;
+  gap: 5px;
+  transition: opacity 0.35s ease;
+}
+
+.gr .gr-src__name { opacity: 0; gap: 2px; }
+.gr .gr-src[data-found] .gr-src__skel { opacity: 0; }
+.gr .gr-src[data-found] .gr-src__name { opacity: 1; }
+
+.gr .gr-src__name .ss-text { font-size: 12px; color: var(--ss-text-strong); font-weight: 500; }
+.gr .gr-src__name .gr-src__section { color: var(--ss-text); font-weight: 400; font-size: 11px; }
+
+/* Skeleton lines and the excerpt share one cell: the card keeps its height */
+.gr .gr-src__body { padding-left: 30px; display: grid; }
+.gr .gr-src__body > * { grid-area: 1 / 1; }
+.gr .gr-excerpt-skel { padding-top: 6px; gap: 13px; align-content: start; transition: opacity 0.3s ease; }
+.gr .gr-src[data-found] .gr-excerpt-skel { opacity: 0; }
+
+.gr .gr-excerpt {
+  color: var(--ss-text);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.gr .gr-excerpt-bars { display: grid; gap: 7px; padding-top: 3px; }
+.gr .gr-excerpt-bars > :nth-child(n) { flex: none; }
+
+/* Narrow: the window bleeds off the right, wider than tall; the Sources card
+   straddles its bottom edge over the margin under the composer and runs off
+   the bottom */
+.gr .ss-stage[data-layout='compact'] .gr-win {
+  top: 16px;
+  left: 16px;
+  width: 420px;
+  height: 330px;
+}
+
+/* Words stay a gutter clear of the stage's right edge, where the window runs off */
+.gr .ss-stage[data-layout='compact'] .gr-body { padding: 12px 94px 40px 16px; }
+.gr .ss-stage[data-layout='compact'] .gr-turn--past { display: none; }
+.gr .ss-stage[data-layout='compact'] .gr-thread { padding-bottom: 12px; }
+
+.gr .ss-stage[data-layout='compact'] .gr-sources {
+  top: 318px;
+  left: 32px;
+  width: 310px;
+  height: auto;
+}
