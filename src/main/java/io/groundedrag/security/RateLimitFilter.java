@@ -15,8 +15,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
- * Per-caller token bucket on the endpoints that cost money (chat = LLM tokens, upload =
- * embedding calls). Keyed by the authenticated caller, never by IP: behind a load balancer
+ * Per-caller token bucket on the endpoints that cost money (chat and MCP tool calls = LLM tokens,
+ * upload = embedding calls). Keyed by the authenticated caller, never by IP: behind a load balancer
  * every user shares an IP, and one tenant must not exhaust another's budget.
  *
  * <p>In-process; with several replicas the effective limit is per replica. Move the buckets to
@@ -68,8 +68,10 @@ public class RateLimitFilter extends OncePerRequestFilter {
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getRequestURI();
         boolean chat = path.startsWith("/api/v1/chat");
+        // MCP tool calls run retrieval and generation too
+        boolean mcp = HttpMethod.POST.matches(request.getMethod()) && path.equals("/mcp");
         boolean upload = HttpMethod.POST.matches(request.getMethod()) && path.matches("/api/v1/spaces/[^/]+/documents");
-        return !(chat || upload);
+        return !(chat || upload || mcp);
     }
 
     @Override
