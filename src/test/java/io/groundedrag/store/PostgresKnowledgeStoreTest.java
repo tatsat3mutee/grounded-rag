@@ -34,6 +34,24 @@ class PostgresKnowledgeStoreTest extends KnowledgeStoreContract {
         return store;
     }
 
+    @Autowired
+    org.springframework.ai.chat.memory.ChatMemoryRepository chatMemoryRepository;
+
+    /** Conversation memory on Spring AI's JdbcChatMemoryRepository over the Flyway-created table. */
+    @org.junit.jupiter.api.Nested
+    class ChatMemory extends io.groundedrag.chat.ConversationMemoryContract {
+        @Override
+        protected org.springframework.ai.chat.memory.ChatMemoryRepository repository() {
+            return chatMemoryRepository;
+        }
+
+        @org.junit.jupiter.api.Test
+        void isTheJdbcRepository() {
+            org.assertj.core.api.Assertions.assertThat(chatMemoryRepository)
+                    .isInstanceOf(org.springframework.ai.chat.memory.repository.jdbc.JdbcChatMemoryRepository.class);
+        }
+    }
+
     /** The trace contract against JSONB storage, sharing this container and context. */
     @org.junit.jupiter.api.Nested
     class Traces extends io.groundedrag.observability.TraceStoreContract {

@@ -9,5 +9,6 @@ spring:
     placeholders:
       embedding_dimensions: ${rag.embedding.dimensions}
 
+
 rag:
   store: postgres

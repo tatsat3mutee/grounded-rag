@@ -30,6 +30,14 @@ spring:
         transcription: none
       moderation: none
       decision: none
+    mcp:
+      server:
+        name: grounded-rag
+        version: 1.0.0
+        protocol: streamable
+        instructions: >-
+          Search and ask the user's document spaces. Answers cite numbered sources and are verified
+          against them; prefer ask_documents for answers and search_documents for raw evidence.
 
 rag:
   store: memory

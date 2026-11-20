@@ -7,6 +7,7 @@ import javax.sql.DataSource;
 
 import io.groundedrag.cache.SemanticCache;
 import io.groundedrag.chat.ChatAnswer;
+import io.groundedrag.chat.BoundedChatMemoryRepository;
 import io.groundedrag.chat.ConversationMemory;
 import io.groundedrag.chat.RagService;
 import io.groundedrag.generation.AnswerGenerator;
@@ -35,8 +36,19 @@ import io.groundedrag.retrieval.TeiReranker;
 import io.groundedrag.store.InMemoryKnowledgeStore;
 import io.groundedrag.store.JdbcKnowledgeStore;
 import io.groundedrag.store.KnowledgeStore;
+import io.groundedrag.springai.GroundedDocumentRetriever;
+import io.groundedrag.springai.StandaloneQueryTransformer;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
+import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.memory.ChatMemoryRepository;
+import org.springframework.ai.chat.memory.MessageWindowChatMemory;
+import org.springframework.ai.chat.memory.repository.jdbc.JdbcChatMemoryRepository;
+import org.springframework.ai.chat.memory.repository.jdbc.PostgresChatMemoryRepositoryDialect;
+import org.springframework.ai.chat.prompt.ChatOptions;
+import org.springframework.ai.rag.advisor.RetrievalAugmentationAdvisor;
+import org.springframework.ai.rag.generation.augmentation.ContextualQueryAugmenter;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.tokenizer.JTokkitTokenCountEstimator;
@@ -86,6 +98,15 @@ public class RagConfiguration {
         TraceStore jdbcTraceStore(JdbcTemplate jdbc, JsonMapper json) {
             return new JdbcTraceStore(jdbc, json);
         }
+
+        /** Conversations survive restarts and are shared by replicas; table from Flyway V2. */
+        @Bean
+        ChatMemoryRepository postgresChatMemoryRepository(JdbcTemplate jdbc) {
+            return JdbcChatMemoryRepository.builder()
+                    .jdbcTemplate(jdbc)
+                    .dialect(new PostgresChatMemoryRepositoryDialect())
+                    .build();
+        }
     }
 
     // ---------- models ----------
@@ -119,19 +140,48 @@ public class RagConfiguration {
         };
     }
 
+    /**
+     * The two ChatClients, built only in LLM mode: the main one answers; the utility one rewrites,
+     * reformulates and judges, optionally on a cheaper model. Both log through SimpleLoggerAdvisor
+     * when rag.generation.log-requests is on (it logs at DEBUG under its own logger).
+     */
+    public record ChatClients(ChatClient answer, ChatClient utility) {
+    }
+
     @Bean
-    AnswerGenerator answerGenerator(RagProperties props, ObjectProvider<ChatModel> chatModel) {
+    @ConditionalOnProperty(name = "rag.generation.provider", havingValue = "llm")
+    ChatClients chatClients(RagProperties props, ObjectProvider<ChatModel> chatModel) {
+        ChatModel model = requireChat(chatModel);
+        RagProperties.Generation g = props.generation();
+        ChatClient answer = clientBuilder(model, g).build();
+        ChatClient.Builder utility = clientBuilder(model, g);
+        if (!g.utilityModel().isBlank()) {
+            utility.defaultOptions(ChatOptions.builder().model(g.utilityModel()));
+        }
+        return new ChatClients(answer, utility.build());
+    }
+
+    private static ChatClient.Builder clientBuilder(ChatModel model, RagProperties.Generation g) {
+        ChatClient.Builder b = ChatClient.builder(model);
+        if (g.logRequests()) {
+            b.defaultAdvisors(new SimpleLoggerAdvisor());
+        }
+        return b;
+    }
+
+    @Bean
+    AnswerGenerator answerGenerator(RagProperties props, ObjectProvider<ChatClients> clients) {
         return switch (props.generation().provider()) {
             case "extractive" -> new ExtractiveAnswerGenerator();
-            case "llm" -> new LlmAnswerGenerator(ChatClient.create(requireChat(chatModel)));
+            case "llm" -> new LlmAnswerGenerator(clients.getObject().answer());
             default -> throw new IllegalStateException("Unknown rag.generation.provider");
         };
     }
 
     @Bean
-    QueryRewriter queryRewriter(RagProperties props, ObjectProvider<ChatModel> chatModel) {
+    QueryRewriter queryRewriter(RagProperties props, ObjectProvider<ChatClients> clients) {
         if ("llm".equals(props.generation().provider()) && props.generation().rewriteFollowUps()) {
-            return new LlmQueryRewriter(ChatClient.create(requireChat(chatModel)));
+            return new LlmQueryRewriter(clients.getObject().utility());
         }
         return new HeuristicQueryRewriter();
     }
@@ -141,6 +191,22 @@ public class RagConfiguration {
             throw new IllegalStateException("rag.generation.provider=llm but no ChatModel is configured; "
                     + "set spring.ai.model.chat (openai|ollama)");
         });
+    }
+
+    // ---------- conversation memory (Spring AI ChatMemory) ----------
+
+    @Bean
+    @ConditionalOnProperty(name = "rag.store", havingValue = "memory", matchIfMissing = true)
+    ChatMemoryRepository boundedChatMemoryRepository(RagProperties props) {
+        return new BoundedChatMemoryRepository(props.conversation().maxConversations());
+    }
+
+    @Bean
+    ChatMemory chatMemory(ChatMemoryRepository repository, RagProperties props) {
+        return MessageWindowChatMemory.builder()
+                .chatMemoryRepository(repository)
+                .maxMessages(props.conversation().maxTurns() * 2)
+                .build();
     }
 
     // ---------- ingestion ----------
@@ -190,16 +256,44 @@ public class RagConfiguration {
     }
 
     @Bean
+    ContextAssembler contextAssembler(RagProperties props, KnowledgeStore store, TokenCountEstimator tokens) {
+        return new ContextAssembler(store, tokens, props.context().maxTokens(), props.context().parentExpansion());
+    }
+
+    @Bean
     RagService ragService(RagProperties props, KnowledgeStore store, Embedder embedder, HybridRetriever retriever,
-            Reranker reranker, TokenCountEstimator tokens, QueryRewriter rewriter, AnswerGenerator generator,
-            TraceStore traces, MeterRegistry meters) {
+            Reranker reranker, ContextAssembler assembler, QueryRewriter rewriter, AnswerGenerator generator,
+            ChatMemory chatMemory, TraceStore traces, MeterRegistry meters) {
         RagProperties.Cache cache = props.cache();
-        return new RagService(store, embedder, retriever, reranker,
-                new ContextAssembler(store, tokens, props.context().maxTokens(), props.context().parentExpansion()),
+        return new RagService(store, embedder, retriever, reranker, assembler,
                 rewriter, generator, new GroundingVerifier(),
                 new SemanticCache<ChatAnswer>(cache.similarity(), cache.ttl(), cache.maxEntries(), Clock.systemUTC()),
                 cache.enabled(), props.confidence().correctiveRetry(),
-                new ConversationMemory(props.conversation().maxTurns(), props.conversation().maxConversations()),
+                new ConversationMemory(chatMemory),
                 traces, meters);
+    }
+
+    // ---------- Spring AI modular RAG ----------
+
+    @Bean
+    GroundedDocumentRetriever groundedDocumentRetriever(Embedder embedder, HybridRetriever retriever,
+            ContextAssembler assembler) {
+        return new GroundedDocumentRetriever(embedder, retriever, assembler);
+    }
+
+    /**
+     * This service's retrieval as a drop-in advisor for any ChatClient:
+     * {@code chatClient.prompt(q).advisors(groundedRagAdvisor)
+     * .advisors(a -> a.param(GroundedDocumentRetriever.SPACES, callerSpaces))}.
+     * The query is first rewritten into a standalone question; empty context makes the model
+     * decline (allowEmptyContext = false) rather than answer from its own knowledge.
+     */
+    @Bean
+    RetrievalAugmentationAdvisor groundedRagAdvisor(GroundedDocumentRetriever retriever, QueryRewriter rewriter) {
+        return RetrievalAugmentationAdvisor.builder()
+                .queryTransformers(new StandaloneQueryTransformer(rewriter))
+                .documentRetriever(retriever)
+                .queryAugmenter(ContextualQueryAugmenter.builder().allowEmptyContext(false).build())
+                .build();
     }
 }

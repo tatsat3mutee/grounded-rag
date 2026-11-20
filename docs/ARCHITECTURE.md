@@ -109,6 +109,17 @@ That way a small space still returns k results instead of being starved by the p
 | Ingestion queue full | `503` problem detail; the version is marked FAILED with "retry later" |
 | Process crash mid-ingest | On startup, interrupted versions are marked FAILED and their chunks cleaned up |
 
+## Integration surfaces
+
+| Surface | For | Built from |
+|---|---|---|
+| REST + SSE (`/api/v1`) | The web UI and applications | `RagService`: the full pipeline with abstention, verification, cache and traces |
+| MCP (`/mcp`) | Agents: Claude Desktop, Claude Code, any MCP client | `KnowledgeBaseTools`: `search_documents` (retriever + context assembler), `ask_documents` (`RagService`) |
+| `groundedRagAdvisor` bean | Other Spring AI code in the same application | Spring AI `RetrievalAugmentationAdvisor` around our `DocumentRetriever` and `QueryTransformer` |
+
+All three use the same retriever, rewriter and reranker, and all three resolve spaces from the
+authenticated caller. Details: [SPRING_AI.md](SPRING_AI.md) and ADR 12.
+
 ## Security
 
 ```mermaid

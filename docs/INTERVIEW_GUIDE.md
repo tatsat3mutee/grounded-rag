@@ -158,6 +158,26 @@ The result was 36 ms to 12.5 ms p50. The same `EXPLAIN` session proved why the i
 setting is needed. Without it, filtered HNSW returned 0 of 30 rows, because the space filter
 removed all 40 candidates the index produced. (docs/PERFORMANCE.md)
 
+**How much of Spring AI do you actually use, beyond the model client?**
+I checked it against the Spring AI Recipes collection, recipe by recipe (docs/SPRING_AI.md).
+- **Adopted where the framework is as good as or better than mine:**
+  - `ChatMemory` with the JDBC repository, so conversations survive restarts.
+  - `SimpleLoggerAdvisor`.
+  - `StructuredOutputValidationAdvisor` on my judge. On its first run it caught a real contract
+    bug: `null` evidence in a `String` field.
+  - The `RelevancyEvaluator` and `FactCheckingEvaluator`.
+  - The MCP server.
+- **The pipeline stays mine:** it has to decline before calling the model and verify after, and an
+  advisor chain always calls the model.
+- **But my components implement Spring AI's `DocumentRetriever` and `QueryTransformer`,** and I
+  expose a `RetrievalAugmentationAdvisor`, so any other `ChatClient` gets my retrieval in one line.
+  Tenant spaces ride in `Query.context()` and fail closed. (ADR 0012)
+
+**Can agents use it?**
+Yes, over MCP. `/mcp` exposes `search_documents` and `ask_documents` with the same API-key or JWT
+auth, space rules and rate limit as REST. The test drives it with the official MCP Java client, and
+a forbidden space comes back as a tool error, not data.
+
 **Why not LangChain or LangGraph?**
 Because the problems they solve aren't present yet. Spring AI already gives me the model and
 embedding abstraction, so LangChain4j would be a second client, a second message type and a second

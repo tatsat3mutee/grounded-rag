@@ -28,6 +28,8 @@ Profiles combine, for example `postgres,openai,rerank`.
 | `embedding.model-name` | | Stored on every document version, used to detect stale vectors after a model change |
 | `generation.provider` | `extractive` | `extractive` (no LLM) or `llm` |
 | `generation.rewrite-follow-ups` | `true` | Rewrite follow-ups into standalone questions with the LLM |
+| `generation.utility-model` | | A cheaper model (same provider) for rewriting, reformulation and evaluation judging; empty means the main model |
+| `generation.log-requests` | `false` | Log every LLM request and response through Spring AI's `SimpleLoggerAdvisor` (set `logging.level.org.springframework.ai.chat.client.advisor=DEBUG`) |
 | `chunking.parent-tokens` / `child-tokens` / `child-overlap-tokens` | 700 / 180 / 40 | Small-to-big chunk sizes (ADR 4) |
 | `retrieval.mode` | `hybrid` | `hybrid`, `vector` or `keyword` (the last two are for ablations) |
 | `retrieval.candidate-k` | `30` | Candidates taken from each search before fusion |
@@ -51,6 +53,10 @@ Profiles combine, for example `postgres,openai,rerank`.
 | `security.jwt.spaces-claim` | `spaces` | Claim holding the caller's spaces: a list, or a space/comma separated string |
 | `rate-limit.enabled` / `requests-per-minute` / `burst` | true / 30 / 10 | Per-caller token bucket on chat and upload |
 | `eval.run` | `false` | Run the evaluation and exit (docs/EVALUATION.md) |
+
+MCP server (`spring.ai.mcp.server.*`): `name: grounded-rag`, `protocol: streamable`, endpoint `/mcp`.
+Set `spring.ai.mcp.server.enabled=false` to turn it off. Conversation memory keeps the last
+`2 × conversation.max-turns` messages per conversation.
 
 **Production checklist:**
 - Replace the dev API keys (`RAG_DEMO_KEY`, `RAG_ADMIN_KEY`, or `RAG_SECURITY_APIKEYS_<n>_*`).

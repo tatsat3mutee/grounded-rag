@@ -36,9 +36,16 @@ public record RagProperties(
     }
 
     /** provider: extractive (offline, no LLM) or llm (Spring AI ChatModel). */
+    /**
+     * utilityModel: an optional cheaper model (same provider) for side tasks such as follow-up
+     * rewriting, reformulation and evaluation judging; empty means the main chat model.
+     * logRequests: log every LLM request and response at DEBUG through Spring AI's SimpleLoggerAdvisor.
+     */
     public record Generation(
             @DefaultValue("extractive") String provider,
-            @DefaultValue("true") boolean rewriteFollowUps) {
+            @DefaultValue("true") boolean rewriteFollowUps,
+            @DefaultValue("") String utilityModel,
+            @DefaultValue("false") boolean logRequests) {
     }
 
     public record Chunking(

@@ -15,3 +15,4 @@ Short records of decisions that shaped the design: context, decision, alternativ
 | [0009](0009-enforced-quality-gates.md) | Quality enforced by the build: architecture rules, store contracts, eval gate, coverage |
 | [0010](0010-no-langchain-langgraph-yet.md) | No LangChain4j or LangGraph4j yet, and the conditions that would change it |
 | [0011](0011-java-25.md) | Java 25: virtual threads without pinning, AOT cache, compact object headers |
+| [0012](0012-spring-ai-as-integration-surface.md) | Spring AI modular RAG and MCP as the integration surface, our pipeline as the engine |

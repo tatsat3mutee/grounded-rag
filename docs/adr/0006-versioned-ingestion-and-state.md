@@ -15,8 +15,8 @@ answers about content that was replaced.
   entries are scoped by `space@version` for every searched space, so stale entries can never
   match. There is no purge step to race with.
 - **The cache key is the standalone question,** not the raw follow-up text.
-- **Conversation memory and the cache are in-process, bounded and LRU.** Documents, chunks and
-  traces are in Postgres.
+- **The cache is in-process, bounded and LRU.** Documents, chunks, traces and (since ADR 12)
+  conversation memory are in Postgres.
 
 ## Alternatives
 - **A message queue (Kafka or SQS) for ingestion.** Worth it with multiple instances or very large
@@ -25,6 +25,7 @@ answers about content that was replaced.
   answers.
 
 ## Consequences
-- For horizontal scaling, `ConversationMemory` and `SemanticCache` move to Redis. Each is one
-  class, and correctness does not depend on it, because invalidation is by version.
+- For horizontal scaling, `SemanticCache` can move to Redis; correctness does not depend on it,
+  because invalidation is by version. Conversation memory already uses Spring AI's
+  `JdbcChatMemoryRepository` under the postgres profile.
 - Ingestion jobs survive restarts as FAILED (with a reason) rather than disappearing.

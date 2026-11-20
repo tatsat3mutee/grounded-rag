@@ -2,11 +2,11 @@
 
 [![ci](https://github.com/tatsat3mutee/grounded-rag/actions/workflows/ci.yml/badge.svg)](https://github.com/tatsat3mutee/grounded-rag/actions/workflows/ci.yml)
 ![Java 25](https://img.shields.io/badge/Java-25%20LTS-blue)
-![Spring Boot 4](https://img.shields.io/badge/Spring%20Boot-4-6db33f)
-![Spring AI 2](https://img.shields.io/badge/Spring%20AI-2-6db33f)
+![Spring Boot 4.2](https://img.shields.io/badge/Spring%20Boot-4.2-6db33f)
+![Spring AI 2.1](https://img.shields.io/badge/Spring%20AI-2.1-6db33f)
 ![License: MIT](https://img.shields.io/badge/license-MIT-lightgrey)
 
-A multi-tenant document question-answering service built on **Java 25, Spring Boot 4 and Spring AI 2**.
+A multi-tenant document question-answering service built on **Java 25, Spring Boot 4.2 and Spring AI 2.1**.
 Every answer cites its sources, is checked against them before it is returned, and comes with a
 confidence level. When the documents do not contain the answer, the service says so instead of
 guessing, and it decides that without spending an LLM call.
@@ -26,7 +26,7 @@ record (ADR).
 |---|---|---|
 | Model cites a source that doesn't exist, or invents a figure | Every answer is verified: citations must map to real sources, and every number must appear in the evidence | `GroundingVerifier`, [ADR 7](docs/adr/0007-verify-every-answer.md) |
 | Answers off-topic questions with confident nonsense | Confidence policy: decline without calling the LLM when evidence is missing; caveat when it is weak; one corrective re-query first | `RagService`, [ADR 5](docs/adr/0005-confidence-and-abstention.md) |
-| Follow-up questions ("and for annual plans?") retrieve nothing | Follow-ups are rewritten into standalone questions before retrieval and caching | `QueryRewriter` |
+| Follow-up questions ("and for annual plans?") retrieve nothing | Follow-ups are rewritten into standalone questions before retrieval and caching; history is Spring AI `ChatMemory`, persisted in Postgres | `QueryRewriter`, `ConversationMemory` |
 | Cache serves answers about content that changed | Cache key includes a per-space corpus version that every ingest/delete bumps | `SemanticCache` |
 | Tenant isolation trusts a request header | Spaces come from the authenticated caller (API key, or an OIDC/JWT claim filled by your identity provider); requests for other spaces get 403 (fails closed) | `SpaceAuthorizer`, `JwtCallerConverter`, [ADR 8](docs/adr/0008-tenancy-from-credentials.md) |
 | One tenant burns the shared LLM budget | Per-caller token bucket on chat and upload, `429` with `Retry-After` | `RateLimitFilter` |
@@ -124,6 +124,17 @@ All profiles and properties: [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
 | `POST` | `/api/v1/answers/{id}/feedback` | `{rating: 1 or -1, comment?}` |
 | `GET` | `/actuator/health`, `/actuator/prometheus` | Probes and metrics (`rag.stage`, `rag.answers`, `rag.ingest`) |
 
+**From agents (MCP).** `/mcp` serves `search_documents` and `ask_documents` over streamable HTTP, with the
+same authentication, space rules and rate limit:
+
+```bash
+claude mcp add --transport http grounded-rag http://localhost:8080/mcp --header "X-API-Key: dev-key-change-me-0001"
+```
+
+**From other Spring AI code.** The `groundedRagAdvisor` bean is a `RetrievalAugmentationAdvisor` built
+from this service's retriever and rewriter. How, and which Spring AI features are used where:
+[docs/SPRING_AI.md](docs/SPRING_AI.md).
+
 All `/api` calls need either an `X-API-Key` header or, when `rag.security.jwt.*` is configured,
 an `Authorization: Bearer <JWT>` from your identity provider. Errors are RFC 9457 problem details.
 
@@ -169,16 +180,20 @@ other. Method, the 46k-chunk run, and the iterative-scan evidence: [docs/PERFORM
 
 ## Quality gates
 
-`./mvnw verify` (CI on every push) runs 100+ tests and fails the build on any of these:
+`./mvnw verify` (CI on every push) runs 126 tests and fails the build on any of these:
 
 - **Architecture rules (ArchUnit):** domain packages carry no Spring web or security types, only
   the store touches JDBC, and there are no package cycles.
 - **Store contracts:** the same tests run against the in-memory store and real Postgres + pgvector
   (Testcontainers, which also exercises the Flyway migration and its indexes).
 - **API tests**, including JWT validation (expired, forged, wrong audience) and rate limiting.
+- **MCP tests** with the official MCP Java client: tools listed, cited search, verified answers,
+  forbidden spaces refused, no key no connection.
+- **Spring AI integration tests:** the retriever inside a real `ChatClient` + `RetrievalAugmentationAdvisor`,
+  and conversation memory on both the in-process and JDBC repositories.
 - **A streaming test over a real socket.** It catches the SSE/async-dispatch security bug that MockMvc cannot.
 - **The evaluation quality gate** on the golden set.
-- **Line coverage ≥ 85%** (JaCoCo; currently about 93%).
+- **Line coverage ≥ 85%** (JaCoCo; currently about 92%).
 
 ## Project layout
 
@@ -193,6 +208,8 @@ src/main/java/io/groundedrag/
   cache/         semantic cache with corpus-version invalidation
   observability/ answer traces and feedback
   security/      API-key and JWT authentication, space authorisation, rate limiting
+  springai/      Spring AI modular RAG adapters (DocumentRetriever, QueryTransformer)
+  mcp/           MCP tools for agents
   eval/          golden-set evaluator and runner
   config/        composition root and typed properties
   web/           REST + SSE controllers, problem details
@@ -202,8 +219,9 @@ docs/            architecture, ADRs, evaluation, performance, configuration, int
 
 ## Known limitations
 
-- Conversation memory and the answer cache are in-process. That suits a single instance; the
-  seam for Redis is one interface each ([ADR 6](docs/adr/0006-versioned-ingestion-and-state.md)).
+- The answer cache is in-process (correct across replicas because it is keyed by corpus version,
+  but not shared). Conversation memory is persisted in Postgres through Spring AI's
+  `JdbcChatMemoryRepository`.
 - Scanned PDFs need OCR, which is not included.
 - The offline profile cannot handle paraphrases. That is the measured case for running the
   cross-encoder profile ([EVALUATION](docs/EVALUATION.md)).
