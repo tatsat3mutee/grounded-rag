@@ -71,7 +71,8 @@ public final class Fixtures {
         return new RagService(store, embedder, retriever, new NoopReranker(),
                 new ContextAssembler(store, TOKENS, 3000, true), rewriter, generator, new GroundingVerifier(),
                 new SemanticCache<ChatAnswer>(0.97, Duration.ofHours(1), 100, Clock.systemUTC()), true, true,
-                new ConversationMemory(6, 100), traces, meters);
+                new ConversationMemory(org.springframework.ai.chat.memory.MessageWindowChatMemory.builder()
+                        .chatMemoryRepository(new io.groundedrag.chat.BoundedChatMemoryRepository(100)).maxMessages(12).build()), traces, meters);
     }
 
     /** Indexes synchronously and returns the resulting record. */

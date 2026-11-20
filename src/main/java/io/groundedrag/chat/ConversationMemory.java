@@ -1,48 +1,42 @@
 package io.groundedrag.chat;
 
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
-import java.util.Map;
+import java.util.UUID;
 
 import io.groundedrag.generation.Turn;
+import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.UserMessage;
 
 /**
- * Bounded, per-principal conversation history (LRU over conversations, last N turns each).
- * Keyed by principal + conversation id so one API key can never read another's conversation.
+ * Per-principal conversation history on Spring AI's {@link ChatMemory}: a message window over a
+ * pluggable {@code ChatMemoryRepository} (bounded in-process by default, JDBC under the postgres
+ * profile, so follow-ups survive restarts and work across replicas).
  *
- * <p>In-process by design for a single instance; for horizontal scaling this interface is the
- * seam to move it to Redis (see docs/adr/0006-state-placement.md).
+ * <p>The memory key is a name-based UUID of principal and conversation id: one API key can never
+ * read another's conversation even with the same id, and the key fits the repository's 36-char
+ * column.
  */
 public class ConversationMemory {
 
-    private final int maxTurns;
-    private final Map<String, List<Turn>> conversations;
+    private final ChatMemory memory;
 
-    public ConversationMemory(int maxTurns, int maxConversations) {
-        this.maxTurns = maxTurns;
-        this.conversations = new LinkedHashMap<>(16, 0.75f, true) {
-            @Override
-            protected boolean removeEldestEntry(Map.Entry<String, List<Turn>> eldest) {
-                return size() > maxConversations;
-            }
-        };
+    public ConversationMemory(ChatMemory memory) {
+        this.memory = memory;
     }
 
-    public synchronized List<Turn> history(String principal, String conversationId) {
-        List<Turn> turns = conversations.get(key(principal, conversationId));
-        return turns == null ? List.of() : List.copyOf(turns);
+    public List<Turn> history(String principal, String conversationId) {
+        return Turn.fromMessages(memory.get(key(principal, conversationId)));
     }
 
-    public synchronized void append(String principal, String conversationId, Turn turn) {
-        List<Turn> turns = conversations.computeIfAbsent(key(principal, conversationId), k -> new ArrayList<>());
-        turns.add(turn);
-        while (turns.size() > maxTurns) {
-            turns.remove(0);
-        }
+    public void append(String principal, String conversationId, Turn turn) {
+        memory.add(key(principal, conversationId),
+                List.of(new UserMessage(turn.question()), new AssistantMessage(turn.answer())));
     }
 
-    private static String key(String principal, String conversationId) {
-        return principal + "\u0000" + conversationId;
+    static String key(String principal, String conversationId) {
+        return UUID.nameUUIDFromBytes((principal + "\u0000" + conversationId).getBytes(StandardCharsets.UTF_8))
+                .toString();
     }
 }
