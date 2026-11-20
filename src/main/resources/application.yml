@@ -29,6 +29,7 @@ spring:
         speech: none
         transcription: none
       moderation: none
+      decision: none
 
 rag:
   store: memory
