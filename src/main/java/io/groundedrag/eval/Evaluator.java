@@ -46,9 +46,23 @@ public class Evaluator {
             List<String> misses) {
     }
 
-    /** {@code faithfulness} is null when no judge model was configured. */
+    /** Model-graded scores are null when no judge model was configured. */
     public record AnswerScores(int answerable, double factAccuracy, double groundedRate, int unanswerable,
-            double abstentionAccuracy, double falseAbstentionRate, Double faithfulness, List<String> failures) {
+            double abstentionAccuracy, double falseAbstentionRate, Double faithfulness, Double contextConsistency,
+            Double factCheck, List<String> failures) {
+    }
+
+    /**
+     * Model-based graders, all optional: our claim-by-claim {@link FaithfulnessJudge}, and Spring
+     * AI's built-in {@code RelevancyEvaluator} (is the response in line with the retrieved context)
+     * and {@code FactCheckingEvaluator} (is the whole answer supported by the context).
+     */
+    public record Graders(FaithfulnessJudge judge, org.springframework.ai.evaluation.Evaluator contextConsistency,
+            org.springframework.ai.evaluation.Evaluator factCheck) {
+
+        public static Graders none() {
+            return new Graders(null, null, null);
+        }
     }
 
     private final KnowledgeStore store;
@@ -135,13 +149,18 @@ public class Evaluator {
     }
 
     public AnswerScores answers(List<EvalCase> cases, RagService rag) {
-        return answers(cases, rag, null);
+        return answers(cases, rag, Graders.none());
     }
 
     public AnswerScores answers(List<EvalCase> cases, RagService rag, FaithfulnessJudge judge) {
+        return answers(cases, rag, new Graders(judge, null, null));
+    }
+
+    public AnswerScores answers(List<EvalCase> cases, RagService rag, Graders graders) {
+        FaithfulnessJudge judge = graders.judge();
         int answerable = 0, correct = 0, grounded = 0, unanswerable = 0, abstained = 0, falseAbstain = 0;
         double faithfulnessSum = 0;
-        int judged = 0;
+        int judged = 0, consistencyPass = 0, consistencyRuns = 0, factPass = 0, factRuns = 0;
         List<String> failures = new ArrayList<>();
         for (EvalCase c : cases) {
             ChatAnswer a = rag.ask(new RagService.Question("eval", spaces(c), c.question(), null));
@@ -160,12 +179,35 @@ public class Evaluator {
                 }
                 if (declined) {
                     falseAbstain++;
-                } else if (judge != null) {
-                    FaithfulnessJudge.Verdict v = judge.judge(a);
-                    faithfulnessSum += v.score();
-                    judged++;
-                    v.claims().stream().filter(cl -> !cl.supported())
-                            .forEach(cl -> failures.add(c.id() + " unsupported claim: " + cl.claim()));
+                } else {
+                    if (judge != null) {
+                        FaithfulnessJudge.Verdict v = judge.judge(a);
+                        faithfulnessSum += v.score();
+                        judged++;
+                        v.claims().stream().filter(cl -> !cl.supported())
+                                .forEach(cl -> failures.add(c.id() + " unsupported claim: " + cl.claim()));
+                    }
+                    if (graders.contextConsistency() != null || graders.factCheck() != null) {
+                        var request = new org.springframework.ai.evaluation.EvaluationRequest(c.question(),
+                                a.sources().stream().map(s -> new org.springframework.ai.document.Document(s.excerpt())).toList(),
+                                a.answer());
+                        if (graders.contextConsistency() != null) {
+                            consistencyRuns++;
+                            if (graders.contextConsistency().evaluate(request).isPass()) {
+                                consistencyPass++;
+                            } else {
+                                failures.add(c.id() + " response not in line with context (Spring AI RelevancyEvaluator)");
+                            }
+                        }
+                        if (graders.factCheck() != null) {
+                            factRuns++;
+                            if (graders.factCheck().evaluate(request).isPass()) {
+                                factPass++;
+                            } else {
+                                failures.add(c.id() + " answer not supported (Spring AI FactCheckingEvaluator)");
+                            }
+                        }
+                    }
                 }
             } else {
                 unanswerable++;
@@ -178,7 +220,9 @@ public class Evaluator {
         }
         return new AnswerScores(answerable, ratio(correct, answerable), ratio(grounded, answerable), unanswerable,
                 ratio(abstained, unanswerable), ratio(falseAbstain, answerable),
-                judge == null || judged == 0 ? null : faithfulnessSum / judged, failures);
+                judge == null || judged == 0 ? null : faithfulnessSum / judged,
+                consistencyRuns == 0 ? null : (double) consistencyPass / consistencyRuns,
+                factRuns == 0 ? null : (double) factPass / factRuns, failures);
     }
 
     public static String markdown(List<RetrievalScores> retrieval, AnswerScores answers, String setup) {
@@ -201,16 +245,21 @@ public class Evaluator {
                     | False abstentions | %.3f |
                     | Unanswerable questions | %d |
                     | Correctly declined | %.3f |
-                    | Faithfulness (LLM judge) | %s |
+                    | Faithfulness, claim by claim (FaithfulnessJudge) | %s |
+                    | In line with context (Spring AI RelevancyEvaluator) | %s |
+                    | Whole answer supported (Spring AI FactCheckingEvaluator) | %s |
                     """, answers.answerable(), answers.factAccuracy(), answers.groundedRate(),
                     answers.falseAbstentionRate(), answers.unanswerable(), answers.abstentionAccuracy(),
-                    answers.faithfulness() == null ? "not run (no judge model)"
-                            : String.format(Locale.ROOT, "%.3f", answers.faithfulness())));
+                    rate(answers.faithfulness()), rate(answers.contextConsistency()), rate(answers.factCheck())));
             if (!answers.failures().isEmpty()) {
                 sb.append("\nFailures: ").append(String.join("; ", answers.failures())).append('\n');
             }
         }
         return sb.toString();
+    }
+
+    private static String rate(Double d) {
+        return d == null ? "not run (no judge model)" : String.format(Locale.ROOT, "%.3f", d);
     }
 
     private static List<String> distinctSources(List<RetrievedChunk> chunks) {

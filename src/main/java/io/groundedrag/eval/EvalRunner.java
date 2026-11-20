@@ -58,10 +58,23 @@ class EvalRunner implements ApplicationRunner {
         this.context = context;
     }
 
-    /** Uses the configured chat model as judge; ideally point it at a stronger model than the generator. */
-    private FaithfulnessJudge judge() {
+    /**
+     * Model graders on the configured chat model (the utility model when one is set). Ideally a
+     * stronger model than the generator: a judge has its own error rate.
+     */
+    private Evaluator.Graders graders() {
         ChatModel model = chatModel.getIfAvailable();
-        return model == null ? null : new FaithfulnessJudge(ChatClient.create(model));
+        if (model == null) {
+            return Evaluator.Graders.none();
+        }
+        String utility = props.generation().utilityModel();
+        ChatClient.Builder builder = ChatClient.builder(model);
+        if (!utility.isBlank()) {
+            builder.defaultOptions(org.springframework.ai.chat.prompt.ChatOptions.builder().model(utility));
+        }
+        return new Evaluator.Graders(new FaithfulnessJudge(builder.clone().build()),
+                org.springframework.ai.chat.evaluation.RelevancyEvaluator.builder().chatClientBuilder(builder.clone()).build(),
+                org.springframework.ai.chat.evaluation.FactCheckingEvaluator.builder(builder.clone()).build());
     }
 
     @Override
@@ -73,7 +86,7 @@ class EvalRunner implements ApplicationRunner {
         String report = Evaluator.markdown(
                 List.of(ev.retrieval(cases, RetrievalMode.HYBRID, k), ev.retrieval(cases, RetrievalMode.VECTOR, k),
                         ev.retrieval(cases, RetrievalMode.KEYWORD, k)),
-                ev.answers(cases, rag, judge()),
+                ev.answers(cases, rag, graders()),
                 "Setup: %d documents, %d questions, embedding=%s, reranker=%s, generator=%s, k=%d"
                         .formatted(docs, cases.size(), embedder.modelName(), reranker.name(),
                                 props.generation().provider(), k));
